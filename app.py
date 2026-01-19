@@ -2,8 +2,9 @@ import streamlit as st
 import requests
 import sqlite3
 import threading
-from datetime import date
-from datetime import datetime
+import pytz
+from datetime import datetime, date, time
+MALAYSIA_TZ = pytz.timezone("Asia/Kuala_Lumpur")
 
 #telegram config
 TELEGRAM_BOT_TOKEN = "8484384102:AAESdSCdUZUaxhfpQp2YSpZhofpwAFE_qhI"
@@ -31,6 +32,20 @@ def send_telegram_message_async(text):
             print("Telegram error:", e)
 
     threading.Thread(target=task, args=(text,), daemon=True).start()
+    
+def reset_today():
+    conn = get_connection()
+    c = conn.cursor()
+    today_str = datetime.now(MALAYSIA_TZ).date().isoformat()
+
+    # Reset daily count
+    c.execute("DELETE FROM kicks WHERE kick_date=?", (today_str,))
+
+    # Delete today's kick events
+    c.execute("DELETE FROM kick_events WHERE DATE(kick_time)=?", (today_str,))
+
+    conn.commit()
+    conn.close()
 
 # ---------- CONFIG ----------
 st.set_page_config(
@@ -190,6 +205,7 @@ if not st.session_state.logged_in:
 page = st.sidebar.radio("Page", ["Home", "Analytics"])
 
 if page == "Home":
+    
     today_count = get_today_kicks()
 
     st.title("👶 Ethan Kick Counter")
@@ -210,7 +226,7 @@ if page == "Home":
     st.write("")
 
     if st.button("➕ ADD KICK", use_container_width=True):
-        now = datetime.now()
+        now = datetime.now(MALAYSIA_TZ)
         today_count += 1
 
         save_kick(today_count)
@@ -227,7 +243,8 @@ if page == "Home":
 
     with st.expander("⚙️ Settings"):
         if st.button("🔄 Reset Today"):
-            save_kick(0)
+            reset_today()
+            st.success("Today's kicks reset!")
             st.rerun()
 
     st.caption("PIN login once per day • Mobile friendly")
@@ -256,7 +273,7 @@ if page == "Analytics":
 
     # ---------- 1️⃣ TABLE: kicks today ----------
     st.subheader("Kicks Today (Time)")
-    today = date.today()
+    today = datetime.now(MALAYSIA_TZ).date()
     today_df = df[df["date"] == today]
 
     if today_df.empty:
