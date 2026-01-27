@@ -265,6 +265,8 @@ elif page=="Analytics":
     st.title("📊 Analytics")
     conn = get_connection()
     df = pd.read_sql("SELECT kick_time FROM kick_events", conn, parse_dates=["kick_time"])
+    st.write("Total kick events in DB:", len(df))
+    st.write(df.tail(5))
     conn.close()
 
     if df.empty:
@@ -349,6 +351,7 @@ elif page=="Analytics":
                 file_name="ethan_kick_report.pdf",
                 mime="application/pdf"
             )
+
 
 
 
