@@ -1,5 +1,4 @@
 import streamlit as st
-import os
 import requests
 import sqlite3
 import threading
@@ -194,12 +193,6 @@ def send_telegram_message_async(text):
 st.set_page_config(page_title="Ethan Kick Counter", page_icon="👶", layout="centered")
 init_db()
 
-st.sidebar.markdown("### 🔍 DB Check")
-st.sidebar.write("DB_PATH:", DB_PATH)
-st.sidebar.write("Exists:", os.path.exists(DB_PATH))
-if os.path.exists(DB_PATH):
-    st.sidebar.write("Size:", os.path.getsize(DB_PATH))
-
 # ---------- SESSION ----------
 if "logged_in" not in st.session_state:
     last_login = get_last_login_date()
@@ -265,8 +258,6 @@ elif page=="Analytics":
     st.title("📊 Analytics")
     conn = get_connection()
     df = pd.read_sql("SELECT kick_time FROM kick_events", conn, parse_dates=["kick_time"])
-    st.write("Total kick events in DB:", len(df))
-    st.write(df.tail(5))
     conn.close()
 
     if df.empty:
@@ -351,7 +342,4 @@ elif page=="Analytics":
                 file_name="ethan_kick_report.pdf",
                 mime="application/pdf"
             )
-
-
-
 
