@@ -1,4 +1,5 @@
 import streamlit as st
+import os
 import requests
 import sqlite3
 import threading
@@ -348,5 +349,6 @@ elif page=="Analytics":
                 file_name="ethan_kick_report.pdf",
                 mime="application/pdf"
             )
+
 
 
