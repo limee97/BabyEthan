@@ -14,7 +14,7 @@ UTC = pytz.UTC
 
 # ---------- DATABASE ----------
 DB_PATH = "/mount/src/kicks.db"
-PIN_CODE = "0802"
+PIN_CODE = st.secrets["PIN_CODE"]
 
 def get_connection():
     conn = sqlite3.connect(DB_PATH, timeout=10, check_same_thread=False)
@@ -177,8 +177,8 @@ def generate_pdf(today_df, interval_df, hist_df, today_hist, today):
 
 
 # ---------- TELEGRAM ----------
-TELEGRAM_BOT_TOKEN = "8484384102:AAESdSCdUZUaxhfpQp2YSpZhofpwAFE_qhI"
-TELEGRAM_CHAT_ID = "1676807915"
+TELEGRAM_BOT_TOKEN = st.secrets["TELEGRAM_BOT_TOKEN"]
+TELEGRAM_CHAT_ID = st.secrets["TELEGRAM_CHAT_ID"]
 
 def send_telegram_message_async(text):
     def task(msg):
