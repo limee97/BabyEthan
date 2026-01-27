@@ -6,13 +6,14 @@ import pytz
 import pandas as pd
 import matplotlib.pyplot as plt
 from datetime import datetime, date, time, timedelta
+from matplotlib.backends.backend_pdf import PdfPages
 
 # ---------- TIMEZONE ----------
 MALAYSIA_TZ = pytz.timezone("Asia/Kuala_Lumpur")
 UTC = pytz.UTC
 
 # ---------- DATABASE ----------
-DB_PATH = "kicks.db"
+DB_PATH = "/mount/src/kicks.db"
 PIN_CODE = "0802"
 
 def get_connection():
@@ -111,6 +112,70 @@ def reset_today():
     conn.commit()
     conn.close()
 
+def generate_pdf(today_df, interval_df, hist_df, today_hist, today):
+    pdf_path = "/mount/src/ethan_kick_report.pdf"
+
+    with PdfPages(pdf_path) as pdf:
+
+        # ---------- PAGE 1: TITLE ----------
+        fig, ax = plt.subplots(figsize=(8.27, 11.69))  # A4
+        ax.axis("off")
+        ax.text(0.5, 0.7, "Ethan Kick Report", ha="center", fontsize=24)
+        ax.text(0.5, 0.6, f"Generated on: {today}", ha="center", fontsize=14)
+        ax.text(0.5, 0.5, "Tracking baby kick patterns", ha="center", fontsize=12)
+        pdf.savefig(fig)
+        plt.close(fig)
+
+        # ---------- PAGE 2: TABLE ----------
+        fig, ax = plt.subplots(figsize=(8.27, 11.69))
+        ax.axis("off")
+        ax.set_title("Kicks Today", fontsize=16, pad=20)
+
+        if today_df.empty:
+            ax.text(0.5, 0.5, "No kicks logged today.", ha="center")
+        else:
+            table_df = today_df.copy()
+            table_df["Time"] = table_df["kick_time"].dt.strftime("%H:%M")
+            table_df = table_df[["Time"]]
+
+            table = ax.table(
+                cellText=table_df.values,
+                colLabels=table_df.columns,
+                loc="center",
+                cellLoc="center"
+            )
+            table.scale(1, 1.5)
+
+        pdf.savefig(fig)
+        plt.close(fig)
+
+        # ---------- PAGE 3: INTERVAL PLOT ----------
+        if not interval_df.empty:
+            fig, ax = plt.subplots(figsize=(8, 4))
+            ax.plot(interval_df["date"], interval_df["avg_interval"], marker="o")
+            ax.set_ylabel("Hours per kick")
+            ax.set_xlabel("Date")
+            ax.set_title("Average Kicking Interval")
+            plt.xticks(rotation=45)
+            pdf.savefig(fig)
+            plt.close(fig)
+
+        # ---------- PAGE 4: DISTRIBUTION ----------
+        fig, ax = plt.subplots(figsize=(8, 4))
+        ax.scatter(hist_df["hour"], hist_df["date"], alpha=0.3, label="Historical")
+        if not today_hist.empty:
+            ax.scatter(today_hist["hour"], today_hist["date"], label="Today")
+        ax.set_xlim(8, 20)
+        ax.set_xlabel("Time of day (hr)")
+        ax.set_ylabel("Date")
+        ax.set_title("Kick Timing Pattern (9am–7pm)")
+        ax.legend()
+        pdf.savefig(fig)
+        plt.close(fig)
+
+    return pdf_path
+
+
 # ---------- TELEGRAM ----------
 TELEGRAM_BOT_TOKEN = "8484384102:AAESdSCdUZUaxhfpQp2YSpZhofpwAFE_qhI"
 TELEGRAM_CHAT_ID = "1676807915"
@@ -188,7 +253,7 @@ if page=="Home":
             st.success("Today's kicks reset!")
             st.rerun()
     st.caption("PIN login once per day • Mobile friendly")
-
+    
 elif page=="Analytics":
     st.title("📊 Analytics")
     conn = get_connection()
@@ -264,3 +329,17 @@ elif page=="Analytics":
     ax.set_title("Kick Timing Pattern (9am–7pm)")
     ax.legend()
     st.pyplot(fig)
+
+    st.divider()
+    st.subheader("📄 Export Report")
+
+    if st.button("Generate PDF Report"):
+        pdf_path = generate_pdf(today_df, interval_df, hist, today_hist, today)
+        with open(pdf_path, "rb") as f:
+            st.download_button(
+                label="⬇️ Download PDF",
+                data=f,
+                file_name="ethan_kick_report.pdf",
+                mime="application/pdf"
+            )
+
