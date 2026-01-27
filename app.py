@@ -193,6 +193,12 @@ def send_telegram_message_async(text):
 st.set_page_config(page_title="Ethan Kick Counter", page_icon="👶", layout="centered")
 init_db()
 
+st.sidebar.markdown("### 🔍 DB Check")
+st.sidebar.write("DB_PATH:", DB_PATH)
+st.sidebar.write("Exists:", os.path.exists(DB_PATH))
+if os.path.exists(DB_PATH):
+    st.sidebar.write("Size:", os.path.getsize(DB_PATH))
+
 # ---------- SESSION ----------
 if "logged_in" not in st.session_state:
     last_login = get_last_login_date()
@@ -342,4 +348,5 @@ elif page=="Analytics":
                 file_name="ethan_kick_report.pdf",
                 mime="application/pdf"
             )
+
 
