@@ -4,7 +4,7 @@ import threading
 import pytz
 import pandas as pd
 import matplotlib.pyplot as plt
-from datetime import datetime, time
+from datetime import datetime, time, timedelta
 from matplotlib.backends.backend_pdf import PdfPages
 from supabase import create_client
 
@@ -22,21 +22,14 @@ PIN_CODE = st.secrets["PIN_CODE"]
 
 # ---------- TELEGRAM ----------
 TELEGRAM_BOT_TOKEN = st.secrets["TELEGRAM_BOT_TOKEN"]
-TELEGRAM_CHAT_IDS = [
-    cid.strip()
-    for cid in st.secrets["TELEGRAM_CHAT_IDS"].split(",")
-]
+TELEGRAM_CHAT_IDS = [cid.strip() for cid in st.secrets["TELEGRAM_CHAT_IDS"].split(",")]
 
 def send_telegram_message_async(text):
     def task(msg):
         url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
         for chat_id in TELEGRAM_CHAT_IDS:
             try:
-                requests.post(
-                    url,
-                    json={"chat_id": chat_id, "text": msg},
-                    timeout=5
-                )
+                requests.post(url, json={"chat_id": chat_id, "text": msg}, timeout=5)
             except Exception as e:
                 print("Telegram error:", e)
     threading.Thread(target=task, args=(text,), daemon=True).start()
@@ -47,10 +40,7 @@ def get_last_login_date():
     return res.data[0]["last_login_date"] if res.data else None
 
 def save_login_date(login_date):
-    supabase.table("login").upsert({
-        "id": 1,
-        "last_login_date": login_date
-    }).execute()
+    supabase.table("login").upsert({"id": 1, "last_login_date": login_date}).execute()
 
 def get_today_kicks():
     today = datetime.now(MALAYSIA_TZ).date().isoformat()
@@ -59,15 +49,10 @@ def get_today_kicks():
 
 def save_kick(count):
     today = datetime.now(MALAYSIA_TZ).date().isoformat()
-    supabase.table("kicks").upsert({
-        "kick_date": today,
-        "count": count
-    }).execute()
+    supabase.table("kicks").upsert({"kick_date": today, "count": count}).execute()
 
 def log_kick_event():
-    supabase.table("kick_events").insert({
-        "kick_time": datetime.utcnow().isoformat()
-    }).execute()
+    supabase.table("kick_events").insert({"kick_time": datetime.utcnow().isoformat()}).execute()
 
 def reset_today():
     today = datetime.now(MALAYSIA_TZ).date().isoformat()
@@ -76,18 +61,13 @@ def reset_today():
     start = datetime.combine(datetime.now(MALAYSIA_TZ).date(), time.min).astimezone(UTC).isoformat()
     end = datetime.combine(datetime.now(MALAYSIA_TZ).date(), time.max).astimezone(UTC).isoformat()
 
-    supabase.table("kick_events") \
-        .delete() \
-        .gte("kick_time", start) \
-        .lte("kick_time", end) \
-        .execute()
+    supabase.table("kick_events").delete().gte("kick_time", start).lte("kick_time", end).execute()
 
 # ---------- PDF ----------
 def generate_pdf(today_df, interval_df, hist_df, today_hist, today):
     pdf_path = "ethan_kick_report.pdf"
 
     with PdfPages(pdf_path) as pdf:
-
         # Title
         fig, ax = plt.subplots(figsize=(8.27, 11.69))
         ax.axis("off")
@@ -105,12 +85,7 @@ def generate_pdf(today_df, interval_df, hist_df, today_hist, today):
         else:
             table_df = today_df.copy()
             table_df["Time"] = table_df["kick_time"].dt.strftime("%H:%M")
-            ax.table(
-                cellText=table_df[["Time"]].values,
-                colLabels=["Time"],
-                loc="center",
-                cellLoc="center"
-            )
+            ax.table(cellText=table_df[["Time"]].values, colLabels=["Time"], loc="center", cellLoc="center")
         pdf.savefig(fig)
         plt.close(fig)
 
@@ -165,13 +140,13 @@ if not st.session_state.logged_in:
                         st.session_state.logged_in = True
                         save_login_date(str(datetime.now(MALAYSIA_TZ).date()))
                         st.session_state.pin_input = ""
-                        st.rerun()
+                        st.experimental_rerun()
                     else:
                         st.session_state.pin_input = ""
                         st.error("Wrong PIN")
                 else:
                     st.session_state.pin_input += key
-                st.rerun()
+                break  # avoid rerun multiple times
     st.stop()
 
 # ---------- MAIN ----------
@@ -189,11 +164,11 @@ if page == "Home":
         send_telegram_message_async(
             f"👶 Kick logged!\nTime: {datetime.now(MALAYSIA_TZ).strftime('%H:%M')}\nTotal today: {today_count}"
         )
-        st.rerun()
+        st.experimental_rerun()
 
     if st.button("🔄 Reset Today"):
         reset_today()
-        st.rerun()
+        st.experimental_rerun()
 
 elif page == "Analytics":
     st.title("📊 Analytics")
@@ -205,7 +180,7 @@ elif page == "Analytics":
         st.info("Not enough data yet.")
         st.stop()
 
-    df["kick_time"] = pd.to_datetime(df["kick_time"],errors="coerce").dt.tz_convert(MALAYSIA_TZ)
+    df["kick_time"] = pd.to_datetime(df["kick_time"], errors="coerce").dt.tz_convert(MALAYSIA_TZ)
     df["date"] = df["kick_time"].dt.date
     df["hour"] = df["kick_time"].dt.hour + df["kick_time"].dt.minute / 60
 
@@ -224,8 +199,8 @@ elif page == "Analytics":
     # ---- Interval plot ----
     st.subheader("Average Kicking Interval")
     days = st.selectbox("Lookback window (days)", [10, 20, 30])
-    cutoff = today.toordinal() - days
-    recent = df[df["date"].apply(lambda d: d.toordinal() >= cutoff)]
+    cutoff_date = (datetime.now(MALAYSIA_TZ) - timedelta(days=days)).date()
+    recent = df[df["date"].notna() & (df["date"] >= cutoff_date)]
 
     interval_data = []
     for d, g in recent.groupby("date"):
@@ -253,6 +228,7 @@ elif page == "Analytics":
     if not today_hist.empty:
         ax.scatter(today_hist["hour"], today_hist["date"], label="Today")
     ax.set_xlim(8, 20)
+    ax.set_title("Kick Timing Pattern (9am–7pm)")
     ax.legend()
     st.pyplot(fig)
 
@@ -261,9 +237,4 @@ elif page == "Analytics":
     if st.button("Generate PDF Report"):
         pdf = generate_pdf(today_df, interval_df, hist, today_hist, today)
         with open(pdf, "rb") as f:
-            st.download_button(
-                "⬇️ Download PDF",
-                f,
-                file_name="ethan_kick_report.pdf",
-                mime="application/pdf"
-            )
+            st.download_button("⬇️ Download PDF", f, file_name="ethan_kick_report.pdf", mime="application/pdf")
