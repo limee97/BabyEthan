@@ -219,7 +219,7 @@ elif page == "Analytics":
         table_df = today_df.copy()
         table_df["Time"] = table_df["kick_time"].dt.strftime("%H:%M")
         table_df.insert(0, "#", range(1, len(table_df) + 1))
-        st.table(table_df[["#", "Time"]])
+        st.table(table_df[["#", "Time"]].reset_index(drop=True))
 
     # ---- Interval plot ----
     st.subheader("Average Kicking Interval")
