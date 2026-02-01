@@ -52,7 +52,9 @@ def save_kick(count):
     supabase.table("kicks").upsert({"kick_date": today, "count": count}).execute()
 
 def log_kick_event():
-    supabase.table("kick_events").insert({"kick_time": datetime.utcnow().isoformat()}).execute()
+    supabase.table("kick_events").insert({
+        "kick_time": datetime.utcnow().isoformat()
+    }).execute()
 
 def reset_today():
     today = datetime.now(MALAYSIA_TZ).date().isoformat()
@@ -61,7 +63,11 @@ def reset_today():
     start = datetime.combine(datetime.now(MALAYSIA_TZ).date(), time.min).astimezone(UTC).isoformat()
     end = datetime.combine(datetime.now(MALAYSIA_TZ).date(), time.max).astimezone(UTC).isoformat()
 
-    supabase.table("kick_events").delete().gte("kick_time", start).lte("kick_time", end).execute()
+    supabase.table("kick_events") \
+        .delete() \
+        .gte("kick_time", start) \
+        .lte("kick_time", end) \
+        .execute()
 
 # ---------- PDF ----------
 def generate_pdf(today_df, interval_df, hist_df, today_hist, today):
@@ -83,9 +89,10 @@ def generate_pdf(today_df, interval_df, hist_df, today_hist, today):
         if today_df.empty:
             ax.text(0.5, 0.5, "No kicks logged today.", ha="center")
         else:
-            table_df = today_df.copy()
-            table_df["Time"] = table_df["kick_time"].dt.strftime("%H:%M")
-            ax.table(cellText=table_df[["Time"]].values, colLabels=["Time"], loc="center", cellLoc="center")
+            tdf = today_df.copy()
+            tdf["Time"] = tdf["kick_time"].dt.strftime("%H:%M:%S")
+            ax.table(cellText=tdf[["Time"]].values, colLabels=["Time"],
+                     loc="center", cellLoc="center")
         pdf.savefig(fig)
         plt.close(fig)
 
@@ -93,7 +100,6 @@ def generate_pdf(today_df, interval_df, hist_df, today_hist, today):
         if not interval_df.empty:
             fig, ax = plt.subplots()
             ax.plot(interval_df["date"], interval_df["avg_interval"], marker="o")
-            ax.set_title("Average Kicking Interval")
             ax.set_ylabel("Hours per kick")
             ax.set_xlabel("Date")
             plt.xticks(rotation=45)
@@ -106,7 +112,6 @@ def generate_pdf(today_df, interval_df, hist_df, today_hist, today):
         if not today_hist.empty:
             ax.scatter(today_hist["hour"], today_hist["date"], label="Today")
         ax.set_xlim(8, 20)
-        ax.set_title("Kick Timing Pattern (9am–7pm)")
         ax.legend()
         pdf.savefig(fig)
         plt.close(fig)
@@ -120,6 +125,7 @@ st.set_page_config(page_title="Ethan Kick Counter", page_icon="👶")
 if "logged_in" not in st.session_state:
     last_login = get_last_login_date()
     st.session_state.logged_in = (last_login == str(datetime.now(MALAYSIA_TZ).date()))
+
 if "pin_input" not in st.session_state:
     st.session_state.pin_input = ""
 
@@ -146,7 +152,7 @@ if not st.session_state.logged_in:
                         st.error("Wrong PIN")
                 else:
                     st.session_state.pin_input += key
-                break  # avoid rerun multiple times
+                break
     st.stop()
 
 # ---------- MAIN ----------
@@ -162,7 +168,7 @@ if page == "Home":
         save_kick(today_count)
         log_kick_event()
         send_telegram_message_async(
-            f"👶 Kick logged!\nTime: {datetime.now(MALAYSIA_TZ).strftime('%H:%M')}\nTotal today: {today_count}"
+            f"👶 Kick logged!\nTime: {datetime.now(MALAYSIA_TZ).strftime('%H:%M:%S')}\nTotal today: {today_count}"
         )
         st.experimental_rerun()
 
@@ -180,36 +186,40 @@ elif page == "Analytics":
         st.info("Not enough data yet.")
         st.stop()
 
-    df["kick_time"] = pd.to_datetime(df["kick_time"], errors="coerce").dt.tz_convert(MALAYSIA_TZ)
+    # 🔥 CRITICAL FIX: force UTC, then convert
+    df["kick_time"] = pd.to_datetime(df["kick_time"], errors="coerce", utc=True)
+    df["kick_time"] = df["kick_time"].dt.tz_convert(MALAYSIA_TZ)
+
     df["date"] = df["kick_time"].dt.date
     df["hour"] = df["kick_time"].dt.hour + df["kick_time"].dt.minute / 60
 
-    # ---- Table: today ----
+    # ---- Today table ----
     st.subheader("Kicks Today (Time)")
     today = datetime.now(MALAYSIA_TZ).date()
     today_df = df[df["date"] == today]
+
     if today_df.empty:
         st.write("No kicks logged today.")
     else:
-        table_df = today_df.copy()
-        table_df["Time"] = table_df["kick_time"].dt.strftime("%H:%M")
-        table_df.insert(0, "#", range(1, len(table_df) + 1))
-        st.table(table_df[["#", "Time"]].reset_index(drop=True))
+        tdf = today_df.copy()
+        tdf["Time"] = tdf["kick_time"].dt.strftime("%H:%M:%S")
+        tdf.insert(0, "#", range(1, len(tdf) + 1))
+        st.table(tdf[["#", "Time"]])
 
     # ---- Interval plot ----
     st.subheader("Average Kicking Interval")
     days = st.selectbox("Lookback window (days)", [10, 20, 30])
-    cutoff_date = (datetime.now(MALAYSIA_TZ) - timedelta(days=days)).date()
-    recent = df[df["date"].notna() & (df["date"] >= cutoff_date)]
+    cutoff = (datetime.now(MALAYSIA_TZ) - timedelta(days=days)).date()
+    recent = df[df["date"] >= cutoff]
 
-    interval_data = []
+    rows = []
     for d, g in recent.groupby("date"):
         if len(g) < 2:
             continue
         intervals = g["kick_time"].sort_values().diff().dropna().dt.total_seconds() / 3600
-        interval_data.append({"date": d, "avg_interval": intervals.mean()})
+        rows.append({"date": d, "avg_interval": intervals.mean()})
 
-    interval_df = pd.DataFrame(interval_data)
+    interval_df = pd.DataFrame(rows)
     if not interval_df.empty:
         fig, ax = plt.subplots()
         ax.plot(interval_df["date"], interval_df["avg_interval"], marker="o")
@@ -218,7 +228,7 @@ elif page == "Analytics":
         plt.xticks(rotation=45)
         st.pyplot(fig)
 
-    # ---- Distribution plot ----
+    # ---- Distribution ----
     st.subheader("Kick Distribution (9am–7pm)")
     hist = df[(df["hour"] >= 9) & (df["hour"] <= 19)]
     today_hist = hist[hist["date"] == today]
@@ -228,7 +238,6 @@ elif page == "Analytics":
     if not today_hist.empty:
         ax.scatter(today_hist["hour"], today_hist["date"], label="Today")
     ax.set_xlim(8, 20)
-    ax.set_title("Kick Timing Pattern (9am–7pm)")
     ax.legend()
     st.pyplot(fig)
 
@@ -237,4 +246,9 @@ elif page == "Analytics":
     if st.button("Generate PDF Report"):
         pdf = generate_pdf(today_df, interval_df, hist, today_hist, today)
         with open(pdf, "rb") as f:
-            st.download_button("⬇️ Download PDF", f, file_name="ethan_kick_report.pdf", mime="application/pdf")
+            st.download_button(
+                "⬇️ Download PDF",
+                f,
+                file_name="ethan_kick_report.pdf",
+                mime="application/pdf"
+            )
