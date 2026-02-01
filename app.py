@@ -52,8 +52,9 @@ def save_kick(count):
     supabase.table("kicks").upsert({"kick_date": today, "count": count}).execute()
 
 def log_kick_event():
+    kick_time = datetime.utcnow().replace(microsecond=0)
     supabase.table("kick_events").insert({
-        "kick_time": datetime.utcnow().isoformat()
+        "kick_time": kick_time.isoformat()
     }).execute()
 
 def reset_today():
