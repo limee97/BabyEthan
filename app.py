@@ -7,6 +7,7 @@ import matplotlib.pyplot as plt
 from datetime import datetime, time, timedelta
 from matplotlib.backends.backend_pdf import PdfPages
 from supabase import create_client
+from datetime import timezone
 
 # ---------- TIMEZONE ----------
 MALAYSIA_TZ = pytz.timezone("Asia/Kuala_Lumpur")
@@ -52,7 +53,7 @@ def save_kick(count):
     supabase.table("kicks").upsert({"kick_date": today, "count": count}).execute()
 
 def log_kick_event():
-    kick_time = datetime.utcnow().replace(microsecond=0)
+    kick_time = datetime.now(timezone.utc).replace(microsecond=0)
     supabase.table("kick_events").insert({
         "kick_time": kick_time.isoformat()
     }).execute()
@@ -147,7 +148,7 @@ if not st.session_state.logged_in:
                         st.session_state.logged_in = True
                         save_login_date(str(datetime.now(MALAYSIA_TZ).date()))
                         st.session_state.pin_input = ""
-                        st.experimental_rerun()
+                        st.rerun()
                     else:
                         st.session_state.pin_input = ""
                         st.error("Wrong PIN")
@@ -171,11 +172,11 @@ if page == "Home":
         send_telegram_message_async(
             f"👶 Kick logged!\nTime: {datetime.now(MALAYSIA_TZ).strftime('%H:%M:%S')}\nTotal today: {today_count}"
         )
-        st.experimental_rerun()
+        st.rerun()
 
     if st.button("🔄 Reset Today"):
         reset_today()
-        st.experimental_rerun()
+        st.rerun()
 
 elif page == "Analytics":
     st.title("📊 Analytics")
