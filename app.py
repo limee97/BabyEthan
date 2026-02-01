@@ -205,7 +205,7 @@ elif page == "Analytics":
         st.info("Not enough data yet.")
         st.stop()
 
-    df["kick_time"] = pd.to_datetime(df["kick_time"], utc=True).dt.tz_convert(MALAYSIA_TZ)
+    df["kick_time"] = pd.to_datetime(df["kick_time"],errors="coerce").dt.tz_convert(MALAYSIA_TZ)
     df["date"] = df["kick_time"].dt.date
     df["hour"] = df["kick_time"].dt.hour + df["kick_time"].dt.minute / 60
 
